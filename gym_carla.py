@@ -21,21 +21,22 @@ class gym_carla_car_following:
         # Steer, Throttle/Brake
         self.action_space = Box(low=np.array([-1.0, -1.0]), high=np.array([1.0, 1.0]))
 
-        # SelfSpeed, NpcSpeed, RelativeX, RelativeY, RelativeAngle
-        # low(0km/h  0km/h  -1m  6m  -pi(rad)), high(50km/h  50km/h  1m   40m  pi(rad))
-        self.observation_space = Box(low=np.array([0.0,  0.0,  -1.0, 0.15, -1.0]),
-                                     high=np.array([1.0,   1.0,   1.0, 1.0, 1.0]))
-
         self.speed_scale      = 50       # km/h
         self.relative_x_scale = 4.0      # m
         self.relative_y_scale = 40.0     # m
         self.relative_angle_scale = 180  # degree
 
+        self._history_path_num = 30
+
+        low = np.zeros([self._history_path_num * 2 + 5])
+        high = np.ones([self._history_path_num * 2 + 5])
+
+        # Only shape of low/high array matters
+        self.observation_space = Box(low=low, high=high)
+
         self._host = host
         self._port = port
         self._timeout = timeout
-
-
 
     def reset(self):
 
@@ -68,6 +69,9 @@ class gym_carla_car_following:
 
         self._client.send_control(steer=0, throttle=0, brake=0, hand_brake=False, reverse=False)
 
+        self._reset = True
+        self._history_path = np.zeros([self._history_path_num, 4])
+
         observation = self._observe()
 
         self._observation = observation
@@ -95,11 +99,9 @@ class gym_carla_car_following:
 
         observation = self._observe()
 
-        self._observation = observation
-
         info = {}
-        done   = self._calculate_done(observation)
-        reward = self._calculate_reward(observation, done)
+        done   = self._calculate_done(observation[:5])
+        reward = self._calculate_reward(observation[:5], done)
 
         return observation, reward, done, info
 
@@ -119,34 +121,97 @@ class gym_carla_car_following:
 
     def _observe(self):
 
-        # observation
+        #################################### current state #######################################
         measurements, _ = self._client.read_data()
         self_car   = measurements.player_measurements
         self_speed = self_car.forward_speed
-
         npc_car  = measurements.non_player_agents[-1].vehicle
         npc_speed = npc_car.forward_speed
-
-        [npc_relative_x, npc_relative_y, npc_relative_angle] = self._transform_coordination(self_car, npc_car)
 
         # normalization
         self_speed /= self.speed_scale
         if self_speed < 0.0:
             self_speed = 0.0
-        npc_speed  /= self.speed_scale
+        npc_speed /= self.speed_scale
         if npc_speed < 0.0:
             npc_speed = 0.0
+
+        # Coordination in this simulator is like this :
+        #         ^ +
+        #         I
+        #         I
+        # <-------0--------
+        # +       I       -
+        #         I -
+
+        # cm -> m
+        npc_pos_x = - npc_car.transform.location.x / 100.0
+        npc_pos_y = npc_car.transform.location.y / 100.0
+        npc_orientation_x = - npc_car.transform.orientation.x
+        npc_orientation_y = npc_car.transform.orientation.y
+
+        pos_x = - self_car.transform.location.x / 100.0
+        pos_y = self_car.transform.location.y / 100.0
+        orientation_x = - self_car.transform.orientation.x
+        orientation_y = self_car.transform.orientation.y
+
+        [npc_relative_x, npc_relative_y, npc_relative_angle] = \
+            self._transform_coordination(pos_x, pos_y, orientation_x, orientation_y,
+                                         npc_pos_x, npc_pos_y, npc_orientation_x, npc_orientation_y)
+
+        # normalization
         npc_relative_x /= self.relative_x_scale
         npc_relative_y /= self.relative_y_scale
         npc_relative_angle /= self.relative_angle_scale
         npc_relative_angle = np.clip(npc_relative_angle, -1.0, 1.0)
 
+        observation = np.zeros([self._history_path_num * 2 + 5])
+        observation[0] = self_speed
+        observation[1] = npc_speed
+        observation[2] = npc_relative_angle
+        observation[3] = npc_relative_x
+        observation[4] = npc_relative_y
 
-        observation = np.hstack((self_speed,
-                                 npc_speed,
-                                 npc_relative_x,
-                                 npc_relative_y,
-                                 npc_relative_angle))
+        #################################### history state #######################################
+        state = np.hstack((npc_pos_x, npc_pos_y, npc_orientation_x, npc_orientation_y))
+        if self._reset == True:
+            self._history_path[:] = state
+            self._reset = False
+            for i in reversed(range(self._history_path_num)):
+                observation[5 + (self._history_path_num - 1 - i) * 2] = npc_relative_x
+                observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = npc_relative_y
+        else:
+            last_his_num = 0
+            for i in reversed(range(self._history_path_num)):
+                npc_pos_x = self._history_path[i, 0]
+                npc_pos_y = self._history_path[i, 1]
+                npc_orientation_x = self._history_path[i, 2]
+                npc_orientation_y = self._history_path[i, 3]
+                [npc_relative_x, npc_relative_y, npc_relative_angle] = \
+                    self._transform_coordination(pos_x, pos_y, orientation_x, orientation_y,
+                            npc_pos_x, npc_pos_y, npc_orientation_x, npc_orientation_y)
+
+                # normalization
+                npc_relative_x /= self.relative_x_scale
+                npc_relative_y /= self.relative_y_scale
+                npc_relative_angle /= self.relative_angle_scale
+                npc_relative_angle = np.clip(npc_relative_angle, -1.0, 1.0)
+                if npc_relative_y > 0.025:
+                    observation[5 + (self._history_path_num - 1 - i) * 2] = npc_relative_x
+                    observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = npc_relative_y
+                else:
+                    last_his_num = i
+                    break
+
+            if last_his_num > 0:
+                for i in reversed(range(last_his_num)):
+                    observation[5 + (self._history_path_num - 1 - i) * 2] = \
+                        observation[5 + (self._history_path_num - 2 - i) * 2]
+                    observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = \
+                        observation[5 + (self._history_path_num - 2 - i) * 2 + 1]
+
+            np.append(state, self._history_path[:self._history_path_num - 1], axis=0)
+
         return observation
 
     def _calculate_reward(self, observation, done):
@@ -180,7 +245,7 @@ class gym_carla_car_following:
         done = False
         if (abs(rel_x) >= 1.0) or \
                 (rel_y >= 1.0) or (rel_y <= 0.15) or \
-                (rel_angle < 1.0 / 3) or (rel_angle > 2.0 / 3):
+                (rel_angle < 1.0 / 4) or (rel_angle > 3.0 / 4):
             done = True
         return done
 
@@ -191,26 +256,8 @@ class gym_carla_car_following:
             angle += 360
         return angle
 
-    def _transform_coordination(self, self_car, npc_car):
-
-
-        # Coordination in this simulator is like this :
-        #         ^ +
-        #         I
-        #         I
-        # <-------0--------
-        # +       I       -
-        #         I -
-        # cm -> m
-        npc_pos_x = - npc_car.transform.location.x / 100.0
-        npc_pos_y = npc_car.transform.location.y / 100.0
-        npc_orientation_x = - npc_car.transform.orientation.x
-        npc_orientation_y = npc_car.transform.orientation.y
-
-        pos_x = - self_car.transform.location.x / 100.0  # cm -> m
-        pos_y = self_car.transform.location.y / 100.0
-        orientation_x = - self_car.transform.orientation.x
-        orientation_y = self_car.transform.orientation.y
+    def _transform_coordination(self, pos_x, pos_y, orientation_x, orientation_y,
+                                npc_pos_x, npc_pos_y, npc_orientation_x, npc_orientation_y):
 
         absolute_angle     = math.atan2(orientation_y, orientation_x) * 180 / 3.1415926
         npc_absolute_angle = math.atan2(npc_orientation_y, npc_orientation_x) * 180 / 3.1415926

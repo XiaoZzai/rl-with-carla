@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
+import math
 from config import *
 
 ###############################  ddpg  ####################################
@@ -79,25 +80,12 @@ class ddpg(object):
         action = self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
         if self.trainflag == True:
             if np.random.randn(1) < self.epsilon:
-                steer = self.epsilon / 2* np.random.randn(1) + 0.0
-                throttle = self.epsilon / 2 * np.random.randn(1) + 0.6
-                # steer = -(s[2] + (s[4] - 0.5)) / 2.0
-                # if s[3] < 0.5:
-                #     if s[1] >= 0.6:
-                #
-                #     else:
-                #
-                # if s[1] >= 0.6:
-                #     if s[3] < 0.5:
-                #         throttle = 0.65
-                #     else:
-                #         throttle = 0.8
-                # elif s[1] < 0.2:
-                #     if s[3] < 0.5:
-                #         throttle =
-                #
-                # action[0] = steer
-                # action[1] = throttle
+                rel_x = s[-2]
+                rel_y = s[-1]
+                self_speed = s[0]
+                npc_speed = s[1]
+                steer = - math.atan(rel_x, rel_y)
+                throttle = npc_speed
             else:
                 noise = np.zeros(self.a_dim)
                 noise[0] = self.epsilon * (0.6 * (0.0 - action[0]) + 0.3 * np.random.randn(1))
