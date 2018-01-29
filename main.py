@@ -4,23 +4,23 @@ import numpy as np
 import traceback
 from gym_carla import gym_carla_car_following
 from ddpg import ddpg
-import config
+from config import *
 
 def interactive_with_environment(agent, env):
 
     # statistic
     total_episode = 0
     total_step = 0
-    each_episode_step = np.zeros(config.MAX_EPISODES)
-    each_episode_reward = np.zeros(config.MAX_EPISODES)
+    each_episode_step = np.zeros(MAX_EPISODES)
+    each_episode_reward = np.zeros(MAX_EPISODES)
 
-    for i in range(config.MAX_EPISODES):
+    for i in range(MAX_EPISODES):
 
         print("Episode %d starts " % i)
 
         state = env.reset()
 
-        for j in range(config.MAX_EP_STEPS):
+        for j in range(MAX_EP_STEPS):
 
             # main algorithm
             action = agent.choose_action(state)
