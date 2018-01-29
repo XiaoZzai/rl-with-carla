@@ -105,11 +105,13 @@ class gym_carla_car_following:
 
     def stop(self):
         self._client.disconnect()
+
+        # Wait for server to be connectable again
         import time
         time.sleep(8)
 
-    def print_state(self, step, state, action, reward):
-        print("Step %d", step)
+    def print_state(self, step, state, action, reward, epsilon=0):
+        print("Step %d : epsilong=%f" % (step, epsilon))
         print("    State : self_speed=%f(km/h), npc_speed=%f(km/h), rel_x=%f(m), rel_y=%f(m), rel_angle=%f(degree)"
               % (state[0] * self.speed_scale, state[1] * self.speed_scale, state[2] * self.relative_x_scale,
                  state[3] * self.relative_y_scale, state[4] * self.relative_angle_scale))
