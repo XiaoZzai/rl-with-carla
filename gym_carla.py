@@ -26,7 +26,7 @@ class gym_carla_car_following:
         self.relative_y_scale = 40.0     # m
         self.relative_angle_scale = 180  # degree
 
-        self._history_path_num = 50
+        self._history_path_num = 60
 
         low = np.zeros([self._history_path_num * 2 + 5])
         high = np.ones([self._history_path_num * 2 + 5])
@@ -70,8 +70,11 @@ class gym_carla_car_following:
 
         self._client.send_control(steer=0, throttle=0, brake=0, hand_brake=False, reverse=False)
 
+        # Reset Flags
         self._reset = True
         self._history_path = np.zeros([self._history_path_num, 4])
+        self._cur_steer = 0
+        self._his_steer = 0
 
         observation = self._observe()
 
@@ -103,6 +106,9 @@ class gym_carla_car_following:
         info = {}
         done   = self._calculate_done(observation[:5])
         reward = self._calculate_reward(observation[:5], done)
+
+        self._his_steer = self._cur_steer
+        self._cur_steer = steering
 
         return observation, reward, done, info
 
@@ -180,12 +186,12 @@ class gym_carla_car_following:
         if self._reset == True:
             self._history_path[:] = state
             self._reset = False
-            for i in reversed(range(self._history_path_num)):
+            for i in range(self._history_path_num):
                 observation[5 + (self._history_path_num - 1 - i) * 2] = npc_relative_x
                 observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = npc_relative_y
         else:
             last_his_num = 0
-            for i in reversed(range(self._history_path_num)):
+            for i in range(self._history_path_num):
                 npc_pos_x = self._history_path[i, 0]
                 npc_pos_y = self._history_path[i, 1]
                 npc_orientation_x = self._history_path[i, 2]
@@ -200,22 +206,27 @@ class gym_carla_car_following:
                 npc_relative_angle /= self.relative_angle_scale
                 npc_relative_angle = np.clip(npc_relative_angle, -1.0, 1.0)
                 if npc_relative_y > 0.025:
-                    observation[5 + (self._history_path_num - 1 - i) * 2] = npc_relative_x
-                    observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = npc_relative_y
+                    observation[5 + i * 2] = npc_relative_x
+                    observation[5 + i * 2 + 1] = npc_relative_y
                 else:
                     last_his_num = i
+                    # print("********************************************************")
+                    # print(observation[5 + i * 2 - 2], observation[5 + i * 2 + 1 - 2])
+                    # print("********************************************************")
+
                     break
 
-            if last_his_num > 0:
-                for i in reversed(range(last_his_num)):
-                    observation[5 + (self._history_path_num - 1 - i) * 2] = \
-                        observation[5 + (self._history_path_num - 2 - i) * 2]
-                    observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = \
-                        observation[5 + (self._history_path_num - 2 - i) * 2 + 1]
 
-            print(state)
-            self._history_path = np.roll(self._history_path, -1, axis=0)
-            self._history_path[self._history_path_num - 1] = state
+            if last_his_num > 0:
+                # print("**********************************************")
+                # print(last_his_num)
+                # print("*************************************************")
+                for i in range(last_his_num, self._history_path_num):
+                    observation[5 + i * 2] = observation[5 + (i - 1) * 2]
+                    observation[5 + i * 2 + 1] = observation[5 + (i - 1) * 2 + 1]
+
+            self._history_path = np.roll(self._history_path, 1, axis=0)
+            self._history_path[0] = state
         return observation
 
     def _calculate_reward(self, observation, done):
@@ -228,14 +239,15 @@ class gym_carla_car_following:
 
         reward = 0
         if done == True:
-            reward = -100.0
+            reward = -1000.0
         else:
             # How to calculate reward ?
             reward = ((rel_y - 0.5)**2) * 10.0 \
                         - abs(rel_x) * 20.0 + \
                         - abs(rel_angle - 1.0 / 2) * 20 \
-                        - abs(speed - npc_speed) * 20.0
-            print(rel_x, rel_y, rel_angle)
+                        - abs(speed - npc_speed) * 20.0 \
+                        - abs(self._cur_steer - self._his_steer) * 20
+
         return reward
 
     def _calculate_done(self, observation):
@@ -247,11 +259,11 @@ class gym_carla_car_following:
         rel_y     = observation[4]
 
         done = False
-        if (abs(rel_x) >= 1.0) or \
-                (rel_y >= 1.0) or (rel_y <= 0.15) or \
-                (rel_angle < 1.0 / 4) or (rel_angle > 3.0 / 4):
+        if (abs(rel_x) >= 2.5) or \
+                (rel_y >= 2.5) or (rel_y <= 0.15) or \
+                (rel_angle < 1.0 / 8) or (rel_angle > 7.0 / 8):
             done = True
-        done = False
+        # done = False
         return done
 
     def _normalize_angle(self, angle):

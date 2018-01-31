@@ -76,7 +76,6 @@ class ddpg(object):
 
     def choose_action(self, s):
 
-
         action = self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
         if self.trainflag == True:
             if np.random.randn(1) < self.epsilon:
@@ -86,14 +85,20 @@ class ddpg(object):
                 rel_y = s[4]
                 self_speed = s[0]
                 npc_speed = s[1]
-                steer = - math.atan2(last_rel_x, last_rel_y)
+                steer = 0.5 - math.atan2(last_rel_y * 40, last_rel_x * 4) / 3.141592653
+                if abs(steer) < 0.15:
+                    steer /= 2
+
                 throttle = npc_speed - self_speed
                 if rel_y > 0.4:
                     if throttle > 0:
-                        throttle *= 1.5
+                        throttle *= 10
+                    else:
+                        throttle = - throttle * 5
                 else:
                     if throttle < 0:
-                        throttle *= 1.5
+                        throttle *= 2
+
                 throttle = np.clip(throttle, -1, 1)
                 action = [steer, throttle]
             else:
@@ -133,8 +138,8 @@ class ddpg(object):
                 results = self.sess.run(self.loss_critic, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
                 self.writer.add_summary(results, self.log_loss_step)
 
-                results = self.sess.run(self.loss_actor, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
-                self.writer.add_summary(results, self.log_loss_step)
+                # results = self.sess.run(self.loss_actor, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
+                # self.writer.add_summary(results, self.log_loss_step)
 
                 self.log_loss_step += 1
 
@@ -177,7 +182,6 @@ class ddpg(object):
         self.memory = np.load("model/ddpg-memory.npy")
         with open("model/pointer", 'r') as file:
             self.pointer = int(file.readline())
-
 
         if self.pointer >= OBSERVE and self.pointer < EXPLORATION + OBSERVE:
             self.epsilon -= (self.pointer - OBSERVE) * ((EPS_INIT - EPS_FINNAL) / EXPLORATION)
