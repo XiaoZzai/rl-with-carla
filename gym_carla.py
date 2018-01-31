@@ -10,6 +10,7 @@ from gym.spaces import Box
 
 from carla import image_converter
 from carla.sensor import Camera
+from carla.util import print_over_same_line
 
 npc_vehicle_seeds  = [248879577, 284212177, 249989477, 464819363, 196289952, 859931552, 873340571, 113509344, 856798697, 422790201, 119129994]
 start_list_indices = [18, 28, 91, 91, 136, 98, 68, 24, 51, 121, 141]
@@ -45,9 +46,9 @@ class gym_carla_car_following:
         self._client.connect()
 
         # settings
-        # index = random.randint(0, len(npc_vehicle_seeds) - 2) # Last one is for testing
+        index = random.randint(0, 4) # Last one is for testing
         # print(index)
-        index = 0
+        # index = 0
         seed = npc_vehicle_seeds[index]
         start_list_index = start_list_indices[index]
 
@@ -120,13 +121,15 @@ class gym_carla_car_following:
         time.sleep(8)
 
     def print_state(self, step, state, action, reward, epsilon=0):
-        print("Step %d : epsilong=%f" % (step, epsilon))
-        print("    State : self_speed=%f(km/h), npc_speed=%f(km/h), rel_angle=%f(degree), "
-              "rel_x=%f(m), rel_y=%f(m), last_rel_x=%f(m), last_rel_y=%f(m)"
-              % (state[0] * self.speed_scale, state[1] * self.speed_scale, state[2] * self.relative_angle_scale,
-                 state[3] * self.relative_x_scale, state[4] * self.relative_y_scale,
-                 state[-2] * self.relative_x_scale, state[-1] * self.relative_y_scale))
-        print("    Action : steer=%f, throttle/brake=%f, reward=%f" % (action[0], action[1], reward))
+        content = "Step %d : epsilong=%f \n" \
+                  "\tState : self_speed=%f(km/h), npc_speed=%f(km/h), rel_angle=%f(degree)\n," \
+                  "\t\trel_x=%f(m), rel_y=%f(m), last_rel_x=%f(m), last_rel_y=%f(m)\n" \
+                  "\tAction : steer=%f, throttle/brake=%f, reward=%f\n" \
+                    % (step, epsilon, state[0] * self.speed_scale, state[1] * self.speed_scale, state[2] * self.relative_angle_scale,
+                      state[3] * self.relative_x_scale, state[4] * self.relative_y_scale,
+                      state[-2] * self.relative_x_scale, state[-1] * self.relative_y_scale,
+                      action[0], action[1], reward)
+        print_over_same_line(content)
 
     def _observe(self):
 
@@ -267,6 +270,7 @@ class gym_carla_car_following:
                        (rel_y * self.relative_y_scale)**2)
 
         if (distance > 100) or \
+                (distance < 8) or \
                 (rel_angle < -0.01):
             done = True
         return done

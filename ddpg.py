@@ -90,17 +90,24 @@ class ddpg(object):
                     steer /= 2
 
                 throttle = npc_speed - self_speed
-                if rel_y > 0.4:
+                distance = math.sqrt((rel_x*4)**2 + (rel_y*40)**2)
+                if distance > 40:
                     if throttle > 0:
                         throttle *= 10
                     else:
-                        throttle = - throttle * 5
+                        throttle = - throttle * 4
+                elif distance > 20:
+                    if throttle > 0:
+                        throttle *=6
+                    else:
+                        throttle = - throttle * 4
                 else:
                     if throttle < 0:
                         throttle *= 2
 
                 throttle = np.clip(throttle, -1, 1)
                 action = [steer, throttle]
+
             else:
                 # add noise
                 noise = np.zeros(self.a_dim)
