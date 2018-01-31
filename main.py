@@ -26,7 +26,7 @@ def interactive_with_environment(agent, env):
             action = agent.choose_action(state)
             next_state, reward, done, info = env.step(action)
 
-            env.print_state(total_step, state, action, reward, agent.epsilon)
+            # env.print_state(total_step, state, action, reward, agent.epsilon)
 
             total_step += 1
             each_episode_step[i] += 1

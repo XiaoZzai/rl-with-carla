@@ -26,7 +26,7 @@ class gym_carla_car_following:
         self.relative_y_scale = 40.0     # m
         self.relative_angle_scale = 180  # degree
 
-        self._history_path_num = 30
+        self._history_path_num = 50
 
         low = np.zeros([self._history_path_num * 2 + 5])
         high = np.ones([self._history_path_num * 2 + 5])
@@ -45,8 +45,9 @@ class gym_carla_car_following:
         self._client.connect()
 
         # settings
-        index = random.randint(0, len(npc_vehicle_seeds) - 2) # Last one is for testing
-        # index = 0
+        # index = random.randint(0, len(npc_vehicle_seeds) - 2) # Last one is for testing
+        # print(index)
+        index = 0
         seed = npc_vehicle_seeds[index]
         start_list_index = start_list_indices[index]
 
@@ -114,9 +115,11 @@ class gym_carla_car_following:
 
     def print_state(self, step, state, action, reward, epsilon=0):
         print("Step %d : epsilong=%f" % (step, epsilon))
-        print("    State : self_speed=%f(km/h), npc_speed=%f(km/h), rel_x=%f(m), rel_y=%f(m), rel_angle=%f(degree)"
-              % (state[0] * self.speed_scale, state[1] * self.speed_scale, state[2] * self.relative_x_scale,
-                 state[3] * self.relative_y_scale, state[4] * self.relative_angle_scale))
+        print("    State : self_speed=%f(km/h), npc_speed=%f(km/h), rel_angle=%f(degree), "
+              "rel_x=%f(m), rel_y=%f(m), last_rel_x=%f(m), last_rel_y=%f(m)"
+              % (state[0] * self.speed_scale, state[1] * self.speed_scale, state[2] * self.relative_angle_scale,
+                 state[3] * self.relative_x_scale, state[4] * self.relative_y_scale,
+                 state[-2] * self.relative_x_scale, state[-1] * self.relative_y_scale))
         print("    Action : steer=%f, throttle/brake=%f, reward=%f" % (action[0], action[1], reward))
 
     def _observe(self):
@@ -210,17 +213,18 @@ class gym_carla_car_following:
                     observation[5 + (self._history_path_num - 1 - i) * 2 + 1] = \
                         observation[5 + (self._history_path_num - 2 - i) * 2 + 1]
 
-            np.append(state, self._history_path[:self._history_path_num - 1], axis=0)
-
+            print(state)
+            self._history_path = np.roll(self._history_path, -1, axis=0)
+            self._history_path[self._history_path_num - 1] = state
         return observation
 
     def _calculate_reward(self, observation, done):
 
-        speed = observation[0]
+        speed     = observation[0]
         npc_speed = observation[1]
-        rel_x = observation[2]
-        rel_y = observation[3]
-        rel_angle = observation[4]
+        rel_angle = observation[2]
+        rel_x     = observation[3]
+        rel_y     = observation[4]
 
         reward = 0
         if done == True:
@@ -231,22 +235,23 @@ class gym_carla_car_following:
                         - abs(rel_x) * 20.0 + \
                         - abs(rel_angle - 1.0 / 2) * 20 \
                         - abs(speed - npc_speed) * 20.0
-
+            print(rel_x, rel_y, rel_angle)
         return reward
 
     def _calculate_done(self, observation):
 
-        speed = observation[0]
+        speed     = observation[0]
         npc_speed = observation[1]
-        rel_x = observation[2]
-        rel_y = observation[3]
-        rel_angle = observation[4]
+        rel_angle = observation[2]
+        rel_x     = observation[3]
+        rel_y     = observation[4]
 
         done = False
         if (abs(rel_x) >= 1.0) or \
                 (rel_y >= 1.0) or (rel_y <= 0.15) or \
                 (rel_angle < 1.0 / 4) or (rel_angle > 3.0 / 4):
             done = True
+        done = False
         return done
 
     def _normalize_angle(self, angle):

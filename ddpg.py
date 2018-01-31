@@ -76,17 +76,28 @@ class ddpg(object):
 
     def choose_action(self, s):
 
-        # add noise
+
         action = self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
         if self.trainflag == True:
             if np.random.randn(1) < self.epsilon:
-                rel_x = s[-2]
-                rel_y = s[-1]
+                last_rel_x = s[-2]
+                last_rel_y = s[-1]
+                rel_x = s[3]
+                rel_y = s[4]
                 self_speed = s[0]
                 npc_speed = s[1]
-                steer = - math.atan(rel_x, rel_y)
-                throttle = npc_speed
+                steer = - math.atan2(last_rel_x, last_rel_y)
+                throttle = npc_speed - self_speed
+                if rel_y > 0.4:
+                    if throttle > 0:
+                        throttle *= 1.5
+                else:
+                    if throttle < 0:
+                        throttle *= 1.5
+                throttle = np.clip(throttle, -1, 1)
+                action = [steer, throttle]
             else:
+                # add noise
                 noise = np.zeros(self.a_dim)
                 noise[0] = self.epsilon * (0.6 * (0.0 - action[0]) + 0.3 * np.random.randn(1))
                 if action[1] < 0:
@@ -109,10 +120,10 @@ class ddpg(object):
                 trans_counter = MEMORY_CAPACITY
 
             indices = np.random.choice(trans_counter, size=BATCH_SIZE)
-            bt = self.memory[indices, :]
-            bs = bt[:, :self.s_dim]
-            ba = bt[:, self.s_dim: self.s_dim + self.a_dim]
-            br = bt[:, -self.s_dim - 1: -self.s_dim]
+            bt  = self.memory[indices, :]
+            bs  = bt[:, :self.s_dim]
+            ba  = bt[:, self.s_dim: self.s_dim + self.a_dim]
+            br  = bt[:, -self.s_dim - 1: -self.s_dim]
             bs_ = bt[:, -self.s_dim:]
 
             self.sess.run(self.atrain, {self.S: bs})
@@ -166,6 +177,7 @@ class ddpg(object):
         self.memory = np.load("model/ddpg-memory.npy")
         with open("model/pointer", 'r') as file:
             self.pointer = int(file.readline())
+
 
         if self.pointer >= OBSERVE and self.pointer < EXPLORATION + OBSERVE:
             self.epsilon -= (self.pointer - OBSERVE) * ((EPS_INIT - EPS_FINNAL) / EXPLORATION)
