@@ -27,7 +27,7 @@ class gym_carla_car_following:
         self.relative_y_scale = 40.0     # m
         self.relative_angle_scale = 180  # degree
 
-        self._history_path_num = 60
+        self._history_path_num = 80
 
         low = np.zeros([self._history_path_num * 2 + 5])
         high = np.ones([self._history_path_num * 2 + 5])
@@ -269,11 +269,17 @@ class gym_carla_car_following:
         distance = math.sqrt((rel_x * self.relative_x_scale)**2 + \
                        (rel_y * self.relative_y_scale)**2)
 
-        if (distance > 100) or \
+        if (distance > 80) or \
                 (distance < 8) or \
-                (rel_angle < -0.01):
+                ((rel_angle < -0.1) and (rel_angle > -0.9)):
+            done = True
+        elif self._calculate_stuck() == True:
+            # judge if stuck
             done = True
         return done
+
+    def _calculate_stuck(self):
+        return False
 
     def _normalize_angle(self, angle):
         while angle > 180:

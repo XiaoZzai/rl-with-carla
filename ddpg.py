@@ -90,33 +90,33 @@ class ddpg(object):
                     steer /= 2
 
                 throttle = npc_speed - self_speed
-                distance = math.sqrt((rel_x*4)**2 + (rel_y*40)**2)
+                distance = math.sqrt((rel_x * 4)**2 + (rel_y * 40)**2)
                 if distance > 40:
                     if throttle > 0:
-                        throttle *= 10
+                        throttle *= 12
                     else:
-                        throttle = - throttle * 4
+                        throttle = - throttle * 6
                 elif distance > 20:
                     if throttle > 0:
-                        throttle *=6
+                        throttle *= 8
                     else:
                         throttle = - throttle * 4
                 else:
                     if throttle < 0:
                         throttle *= 2
 
-                throttle = np.clip(throttle, -1, 1)
                 action = [steer, throttle]
-
             else:
                 # add noise
                 noise = np.zeros(self.a_dim)
-                noise[0] = self.epsilon * (0.6 * (0.0 - action[0]) + 0.3 * np.random.randn(1))
+                noise[0] = self.epsilon * 0.05 * np.random.randn(1)
                 if action[1] < 0:
-                    noise[1] = -self.epsilon * (1.0 * (0.5 - action[1]) + 0.1 * np.random.randn(1))
+                    noise[1] = -self.epsilon * 0.2 * np.random.randn(1)
                 else:
-                    noise[1] = self.epsilon * (1.0 * (-0.1 - action[1]) + 0.05 * np.random.randn(1))
+                    noise[1] = self.epsilon * 0.1 * np.random.randn(1)
                 action += noise
+
+        action = [np.clip(action[0], -1.0, 1.0), np.clip(action[1], -1.0, 1.0)]
 
         if (self.pointer >= OBSERVE) and (self.pointer < EXPLORATION + OBSERVE):
             self.epsilon -= (EPS_INIT - EPS_FINNAL) / EXPLORATION
