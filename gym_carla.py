@@ -237,12 +237,12 @@ class gym_carla_car_following:
         rel_x     = observation[3]
         rel_y     = observation[4]
 
-        reward = 0
+        # reward = 0
         if done == True:
             reward = -1000.0
         else:
             # How to calculate reward ?
-            reward = ((rel_y - 0.5)**2) * 10.0 \
+            reward = ((rel_y - 0.5)**2) * 20.0 \
                         - abs(rel_x) * 20.0 + \
                         - abs(rel_angle - 1.0 / 2) * 20 \
                         - abs(speed - npc_speed) * 20.0 \
@@ -259,11 +259,16 @@ class gym_carla_car_following:
         rel_y     = observation[4]
 
         done = False
-        if (abs(rel_x) >= 2.5) or \
-                (rel_y >= 2.5) or (rel_y <= 0.15) or \
-                (rel_angle < 1.0 / 8) or (rel_angle > 7.0 / 8):
+        # if (abs(rel_x) >= 2.5) or \
+                # (rel_y >= 2.5) or (rel_y <= 0.15) or \
+                # (rel_angle < 1.0 / 8) or (rel_angle > 7.0 / 8):
+            # done = True
+        distance = math.sqrt((rel_x * self.relative_x_scale)**2 + \
+                       (rel_y * self.relative_y_scale)**2)
+
+        if (distance > 100) or \
+                (rel_angle < -0.01):
             done = True
-        # done = False
         return done
 
     def _normalize_angle(self, angle):
